@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, FlatList,
   TextInput, Alert, ActivityIndicator, Image, Modal, ScrollView,
-  KeyboardAvoidingView, Platform
+  KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Switch
 } from 'react-native';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
@@ -16,7 +16,6 @@ const COLORS = {
 const API_BASE = 'https://hyundai-shop-backend-api.onrender.com/api';
 const FALLBACK_IMG = 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=800&auto=format&fit=crop';
 
-// Pre-built Unsplash image suggestions for phones
 const QUICK_IMAGES = [
   { label: 'iPhone', url: 'https://images.unsplash.com/photo-1632661674596-df8be070a5c5?q=80&w=800&auto=format&fit=crop' },
   { label: 'Samsung', url: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=800&auto=format&fit=crop' },
@@ -62,8 +61,9 @@ const InventoryScreen = ({ navigation }) => {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [image, setImage] = useState('');
+  const [discount, setDiscount] = useState('');
+  const [isNew, setIsNew] = useState(false);
 
-  // Validation errors
   const [errors, setErrors] = useState({});
 
   const fetchProducts = async () => {
@@ -78,13 +78,12 @@ const InventoryScreen = ({ navigation }) => {
     }
   };
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  useEffect(() => { fetchProducts(); }, []);
 
   const resetForm = () => {
     setName(''); setPrice(''); setStock('');
     setDescription(''); setCategory(''); setImage('');
+    setDiscount(''); setIsNew(false);
     setErrors({});
     setImagePreviewError(false);
   };
@@ -105,6 +104,8 @@ const InventoryScreen = ({ navigation }) => {
     setDescription(product.description || '');
     setCategory(product.category || 'Smartphone');
     setImage(product.image || '');
+    setDiscount(product.discount ? product.discount.toString() : '');
+    setIsNew(product.isNew || false);
     setErrors({});
     setImagePreviewError(false);
     setModalVisible(true);
@@ -112,39 +113,17 @@ const InventoryScreen = ({ navigation }) => {
 
   const validate = () => {
     const newErrors = {};
-
-    if (!name.trim()) {
-      newErrors.name = 'Product name is required';
-    } else if (name.trim().length < 3) {
-      newErrors.name = 'Name must be at least 3 characters';
-    }
-
-    if (!price) {
-      newErrors.price = 'Price is required';
-    } else if (isNaN(price) || Number(price) <= 0) {
-      newErrors.price = 'Enter a valid price (e.g. 350000)';
-    }
-
-    if (!stock) {
-      newErrors.stock = 'Stock quantity is required';
-    } else if (isNaN(stock) || Number(stock) < 0 || !Number.isInteger(Number(stock))) {
-      newErrors.stock = 'Stock must be a whole number (e.g. 50)';
-    }
-
-    if (!category.trim()) {
-      newErrors.category = 'Category is required';
-    }
-
-    if (!description.trim()) {
-      newErrors.description = 'Description is required';
-    } else if (description.trim().length < 10) {
-      newErrors.description = 'Description must be at least 10 characters';
-    }
-
-    if (image && !isValidUrl(image)) {
-      newErrors.image = 'Enter a valid image URL (must start with http/https)';
-    }
-
+    if (!name.trim()) newErrors.name = 'Product name is required';
+    else if (name.trim().length < 3) newErrors.name = 'Name must be at least 3 characters';
+    if (!price) newErrors.price = 'Price is required';
+    else if (isNaN(price) || Number(price) <= 0) newErrors.price = 'Enter a valid price';
+    if (!stock) newErrors.stock = 'Stock quantity is required';
+    else if (isNaN(stock) || Number(stock) < 0 || !Number.isInteger(Number(stock))) newErrors.stock = 'Stock must be a whole number';
+    if (!category.trim()) newErrors.category = 'Category is required';
+    if (!description.trim()) newErrors.description = 'Description is required';
+    else if (description.trim().length < 10) newErrors.description = 'Description must be at least 10 characters';
+    if (discount && (isNaN(discount) || Number(discount) < 0 || Number(discount) > 100)) newErrors.discount = 'Discount must be 0–100';
+    if (image && !isValidUrl(image)) newErrors.image = 'Enter a valid image URL (http/https)';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -153,14 +132,11 @@ const InventoryScreen = ({ navigation }) => {
     try {
       const u = new URL(url);
       return u.protocol === 'http:' || u.protocol === 'https:';
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   };
 
   const handleSaveProduct = async () => {
     if (!validate()) return;
-
     try {
       setLoading(true);
       const productData = {
@@ -170,10 +146,10 @@ const InventoryScreen = ({ navigation }) => {
         description: description.trim(),
         category: category.trim() || 'Smartphone',
         image: image.trim() || undefined,
+        discount: discount ? Number(discount) : 0,
+        isNew,
       };
-
       const config = { headers: { Authorization: `Bearer ${token}` } };
-
       if (isEditing) {
         await axios.put(`${API_BASE}/products/${currentProductId}`, productData, config);
         Alert.alert('✅ Updated', 'Product updated successfully');
@@ -181,7 +157,6 @@ const InventoryScreen = ({ navigation }) => {
         await axios.post(`${API_BASE}/products`, productData, config);
         Alert.alert('✅ Added', 'Product added to inventory');
       }
-
       setModalVisible(false);
       fetchProducts();
     } catch (error) {
@@ -212,11 +187,37 @@ const InventoryScreen = ({ navigation }) => {
 
   const ProductItem = React.memo(({ item, onEdit, onDelete }) => (
     <View style={styles.productCard}>
-      <ProductImage uri={item.image} />
+      <View style={styles.productImgWrapper}>
+        <ProductImage uri={item.image} />
+        {item.discount > 0 && (
+          <View style={styles.discountBadge}>
+            <Text style={styles.discountBadgeText}>-{item.discount}%</Text>
+          </View>
+        )}
+        {item.isNew && (
+          <View style={styles.newBadge}>
+            <Text style={styles.newBadgeText}>NEW</Text>
+          </View>
+        )}
+      </View>
       <View style={styles.productInfo}>
         <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
         <Text style={styles.productCategory}>{item.category}</Text>
-        <Text style={styles.productPrice}>Rs. {item.price.toLocaleString()}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {item.discount > 0 ? (
+            <>
+              <Text style={styles.productPriceStrike}>Rs. {item.price.toLocaleString()}</Text>
+              <Text style={styles.productPriceDiscount}>
+                Rs. {Math.round(item.price * (1 - item.discount / 100)).toLocaleString()}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.productPrice}>Rs. {item.price.toLocaleString()}</Text>
+          )}
+        </View>
+        <Text style={styles.reviewCount}>
+          ⭐ {item.reviews?.length > 0 ? `${item.reviews.length} review${item.reviews.length > 1 ? 's' : ''}` : 'No reviews yet'}
+        </Text>
         <Text style={[styles.productStock, { color: item.stock > 0 ? COLORS.success : COLORS.danger }]}>
           {item.stock > 0 ? `In Stock: ${item.stock}` : 'Out of Stock'}
         </Text>
@@ -255,6 +256,12 @@ const InventoryScreen = ({ navigation }) => {
           </Text>
           <Text style={styles.overviewLabel}>Total Stock Units</Text>
         </View>
+        <View style={styles.overviewCard}>
+          <Text style={styles.overviewValue}>
+            {products.filter(p => p.discount > 0).length}
+          </Text>
+          <Text style={styles.overviewLabel}>On Discount</Text>
+        </View>
       </View>
 
       {loading && !modalVisible ? (
@@ -279,163 +286,194 @@ const InventoryScreen = ({ navigation }) => {
 
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContainer}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {isEditing ? '✏️ Edit Product' : '📦 Add New Product'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 20 }}
-            >
-
-              <InputField label="Product Name" required error={errors.name}>
-                <TextInput
-                  style={[styles.input, errors.name && styles.inputError]}
-                  value={name}
-                  onChangeText={(t) => { setName(t); setErrors(e => ({ ...e, name: null })); }}
-                  placeholder="e.g. iPhone 15 Pro Max"
-                  placeholderTextColor={COLORS.gray}
-                />
-              </InputField>
-
-              <View style={styles.row}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <InputField label="Price (Rs.)" required error={errors.price}>
-                    <TextInput
-                      style={[styles.input, errors.price && styles.inputError]}
-                      value={price}
-                      onChangeText={(t) => { setPrice(t); setErrors(e => ({ ...e, price: null })); }}
-                      placeholder="e.g. 350000"
-                      placeholderTextColor={COLORS.gray}
-                      keyboardType="numeric"
-                    />
-                  </InputField>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <InputField label="Stock Qty" required error={errors.stock}>
-                    <TextInput
-                      style={[styles.input, errors.stock && styles.inputError]}
-                      value={stock}
-                      onChangeText={(t) => { setStock(t); setErrors(e => ({ ...e, stock: null })); }}
-                      placeholder="e.g. 50"
-                      placeholderTextColor={COLORS.gray}
-                      keyboardType="numeric"
-                    />
-                  </InputField>
-                </View>
-              </View>
-
-              <InputField label="Category" required error={errors.category}>
-                <TextInput
-                  style={[styles.input, errors.category && styles.inputError]}
-                  value={category}
-                  onChangeText={(t) => { setCategory(t); setErrors(e => ({ ...e, category: null })); }}
-                  placeholder="e.g. Smartphone, Tablet, Accessory"
-                  placeholderTextColor={COLORS.gray}
-                />
-              </InputField>
-
-              <InputField label="Description" required error={errors.description}>
-                <TextInput
-                  style={[styles.input, styles.textArea, errors.description && styles.inputError]}
-                  value={description}
-                  onChangeText={(t) => { setDescription(t); setErrors(e => ({ ...e, description: null })); }}
-                  placeholder="Describe the product features, specs, etc."
-                  placeholderTextColor={COLORS.gray}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
-              </InputField>
-
-              {/* Image URL Field with Preview */}
-              <InputField label="Image URL" error={errors.image}>
-                <Text style={styles.urlHint}>
-                  💡 Paste a full image URL starting with https://
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
+          >
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {isEditing ? '✏️ Edit Product' : '📦 Add New Product'}
                 </Text>
-                <TextInput
-                  style={[styles.input, errors.image && styles.inputError]}
-                  value={image}
-                  onChangeText={(t) => {
-                    setImage(t);
-                    setErrors(e => ({ ...e, image: null }));
-                    setImagePreviewError(false);
-                  }}
-                  placeholder="https://images.unsplash.com/..."
-                  placeholderTextColor={COLORS.gray}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-
-                {/* Quick Pick Buttons */}
-                <Text style={styles.quickLabel}>⚡ Quick Pick (tap to use):</Text>
-                <View style={styles.quickRow}>
-                  {QUICK_IMAGES.map((q) => (
-                    <TouchableOpacity
-                      key={q.label}
-                      style={[styles.quickBtn, image === q.url && styles.quickBtnActive]}
-                      onPress={() => { setImage(q.url); setImagePreviewError(false); }}
-                    >
-                      <Text style={[styles.quickBtnText, image === q.url && { color: COLORS.diamond }]}>
-                        {q.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Image Preview */}
-                {image !== '' && (
-                  <View style={styles.previewBox}>
-                    <Text style={styles.previewLabel}>Preview:</Text>
-                    {imagePreviewError ? (
-                      <View style={styles.previewError}>
-                        <Text style={styles.previewErrorText}>❌ Image could not load. Check the URL.</Text>
-                      </View>
-                    ) : (
-                      <Image
-                        source={{ uri: image }}
-                        style={styles.previewImg}
-                        onError={() => setImagePreviewError(true)}
-                        resizeMode="cover"
-                      />
-                    )}
-                  </View>
-                )}
-              </InputField>
-
-              <View style={styles.modalBtnRow}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.saveBtn, loading && { opacity: 0.6 }]}
-                  onPress={handleSaveProduct}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={COLORS.diamond} />
-                  ) : (
-                    <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Product'}</Text>
-                  )}
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
+                  <Text style={styles.closeBtnText}>✕</Text>
                 </TouchableOpacity>
               </View>
 
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 20 }}
+              >
+                <InputField label="Product Name" required error={errors.name}>
+                  <TextInput
+                    style={[styles.input, errors.name && styles.inputError]}
+                    value={name}
+                    onChangeText={(t) => { setName(t); setErrors(e => ({ ...e, name: null })); }}
+                    placeholder="e.g. iPhone 15 Pro Max"
+                    placeholderTextColor={COLORS.gray}
+                    returnKeyType="next"
+                  />
+                </InputField>
+
+                <View style={styles.row}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <InputField label="Price (Rs.)" required error={errors.price}>
+                      <TextInput
+                        style={[styles.input, errors.price && styles.inputError]}
+                        value={price}
+                        onChangeText={(t) => { setPrice(t); setErrors(e => ({ ...e, price: null })); }}
+                        placeholder="e.g. 350000"
+                        placeholderTextColor={COLORS.gray}
+                        keyboardType="numeric"
+                        returnKeyType="next"
+                      />
+                    </InputField>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <InputField label="Stock Qty" required error={errors.stock}>
+                      <TextInput
+                        style={[styles.input, errors.stock && styles.inputError]}
+                        value={stock}
+                        onChangeText={(t) => { setStock(t); setErrors(e => ({ ...e, stock: null })); }}
+                        placeholder="e.g. 50"
+                        placeholderTextColor={COLORS.gray}
+                        keyboardType="numeric"
+                        returnKeyType="next"
+                      />
+                    </InputField>
+                  </View>
+                </View>
+
+                <View style={styles.row}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <InputField label="Discount %" error={errors.discount}>
+                      <TextInput
+                        style={[styles.input, errors.discount && styles.inputError]}
+                        value={discount}
+                        onChangeText={(t) => { setDiscount(t); setErrors(e => ({ ...e, discount: null })); }}
+                        placeholder="e.g. 10"
+                        placeholderTextColor={COLORS.gray}
+                        keyboardType="numeric"
+                        returnKeyType="next"
+                      />
+                    </InputField>
+                  </View>
+                  <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: 4 }}>
+                    <InputField label="Mark as New">
+                      <View style={styles.switchRow}>
+                        <Switch
+                          value={isNew}
+                          onValueChange={setIsNew}
+                          trackColor={{ false: COLORS.icyLake, true: COLORS.golden }}
+                          thumbColor={isNew ? COLORS.sapphire : COLORS.gray}
+                        />
+                        <Text style={styles.switchLabel}>{isNew ? 'Yes' : 'No'}</Text>
+                      </View>
+                    </InputField>
+                  </View>
+                </View>
+
+                <InputField label="Category" required error={errors.category}>
+                  <TextInput
+                    style={[styles.input, errors.category && styles.inputError]}
+                    value={category}
+                    onChangeText={(t) => { setCategory(t); setErrors(e => ({ ...e, category: null })); }}
+                    placeholder="e.g. Smartphone, Tablet, Accessory"
+                    placeholderTextColor={COLORS.gray}
+                    returnKeyType="next"
+                  />
+                </InputField>
+
+                <InputField label="Description" required error={errors.description}>
+                  <TextInput
+                    style={[styles.input, styles.textArea, errors.description && styles.inputError]}
+                    value={description}
+                    onChangeText={(t) => { setDescription(t); setErrors(e => ({ ...e, description: null })); }}
+                    placeholder="Describe the product features, specs, etc."
+                    placeholderTextColor={COLORS.gray}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                  />
+                </InputField>
+
+                {/* Image URL Field */}
+                <InputField label="Image URL" error={errors.image}>
+                  <Text style={styles.urlHint}>💡 Paste a full image URL starting with https://</Text>
+                  <TextInput
+                    style={[styles.input, errors.image && styles.inputError]}
+                    value={image}
+                    onChangeText={(t) => {
+                      setImage(t);
+                      setErrors(e => ({ ...e, image: null }));
+                      setImagePreviewError(false);
+                    }}
+                    placeholder="https://images.unsplash.com/..."
+                    placeholderTextColor={COLORS.gray}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                    blurOnSubmit={true}
+                  />
+
+                  <Text style={styles.quickLabel}>⚡ Quick Pick (tap to use):</Text>
+                  <View style={styles.quickRow}>
+                    {QUICK_IMAGES.map((q) => (
+                      <TouchableOpacity
+                        key={q.label}
+                        style={[styles.quickBtn, image === q.url && styles.quickBtnActive]}
+                        onPress={() => { setImage(q.url); setImagePreviewError(false); Keyboard.dismiss(); }}
+                      >
+                        <Text style={[styles.quickBtnText, image === q.url && { color: COLORS.diamond }]}>
+                          {q.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {image !== '' && (
+                    <View style={styles.previewBox}>
+                      <Text style={styles.previewLabel}>Preview:</Text>
+                      {imagePreviewError ? (
+                        <View style={styles.previewError}>
+                          <Text style={styles.previewErrorText}>❌ Image could not load. Check the URL.</Text>
+                        </View>
+                      ) : (
+                        <Image
+                          source={{ uri: image }}
+                          style={styles.previewImg}
+                          onError={() => setImagePreviewError(true)}
+                          resizeMode="cover"
+                        />
+                      )}
+                    </View>
+                  )}
+                </InputField>
+
+                <View style={styles.modalBtnRow}>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.saveBtn, loading && { opacity: 0.6 }]}
+                    onPress={handleSaveProduct}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color={COLORS.diamond} />
+                    ) : (
+                      <Text style={styles.saveBtnText}>{isEditing ? 'Update' : 'Add Product'}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
@@ -453,29 +491,42 @@ const styles = StyleSheet.create({
   addBtn: { backgroundColor: COLORS.golden, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
   addBtnText: { color: COLORS.diamond, fontWeight: '800', fontSize: 14 },
 
-  overviewContainer: { flexDirection: 'row', paddingHorizontal: 18, paddingTop: 18, gap: 12 },
-  overviewCard: { flex: 1, backgroundColor: COLORS.diamond, borderRadius: 12, padding: 14, alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08 },
+  overviewContainer: { flexDirection: 'row', paddingHorizontal: 18, paddingTop: 18, gap: 10 },
+  overviewCard: { flex: 1, backgroundColor: COLORS.diamond, borderRadius: 12, padding: 12, alignItems: 'center', elevation: 2 },
   overviewValue: { fontSize: 20, fontWeight: '800', color: COLORS.sapphire, marginBottom: 4 },
-  overviewLabel: { fontSize: 11, color: COLORS.gray, fontWeight: '600', textTransform: 'uppercase' },
+  overviewLabel: { fontSize: 10, color: COLORS.gray, fontWeight: '600', textTransform: 'uppercase', textAlign: 'center' },
 
   productCard: {
     backgroundColor: COLORS.diamond, borderRadius: 14, padding: 14, marginBottom: 12,
     flexDirection: 'row', alignItems: 'center',
     elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08,
   },
-  productImg: { width: 64, height: 64, borderRadius: 10, backgroundColor: COLORS.icyLake, marginRight: 14 },
+  productImgWrapper: { position: 'relative', marginRight: 14 },
+  productImg: { width: 64, height: 64, borderRadius: 10, backgroundColor: COLORS.icyLake },
+  discountBadge: {
+    position: 'absolute', top: -4, left: -4,
+    backgroundColor: COLORS.danger, borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2,
+  },
+  discountBadgeText: { color: COLORS.diamond, fontSize: 9, fontWeight: '800' },
+  newBadge: {
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: COLORS.success, borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2,
+  },
+  newBadgeText: { color: COLORS.diamond, fontSize: 9, fontWeight: '800' },
   productInfo: { flex: 1 },
   productName: { fontSize: 15, fontWeight: '700', color: COLORS.blackTie, marginBottom: 2 },
   productCategory: { fontSize: 11, color: COLORS.golden, fontWeight: '600', marginBottom: 3, textTransform: 'uppercase' },
-  productPrice: { fontSize: 14, color: COLORS.sapphire, fontWeight: '700', marginBottom: 2 },
-  productStock: { fontSize: 12, fontWeight: '600' },
+  productPrice: { fontSize: 14, color: COLORS.sapphire, fontWeight: '700' },
+  productPriceStrike: { fontSize: 11, color: COLORS.gray, textDecorationLine: 'line-through' },
+  productPriceDiscount: { fontSize: 14, color: COLORS.danger, fontWeight: '700' },
+  reviewCount: { fontSize: 11, color: COLORS.warning, fontWeight: '600', marginTop: 2 },
+  productStock: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   actionBtns: { flexDirection: 'row', gap: 10 },
   editBtn: { backgroundColor: COLORS.icyLake, padding: 10, borderRadius: 8 },
   deleteBtn: { backgroundColor: '#fee2e2', padding: 10, borderRadius: 8 },
   btnText: { fontSize: 16 },
   emptyText: { textAlign: 'center', marginTop: 40, color: COLORS.gray, fontSize: 16 },
 
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   modalContainer: {
     backgroundColor: COLORS.diamond, borderTopLeftRadius: 28, borderTopRightRadius: 28,
@@ -487,7 +538,6 @@ const styles = StyleSheet.create({
   closeBtnText: { color: COLORS.gray, fontWeight: '700', fontSize: 14 },
 
   row: { flexDirection: 'row' },
-
   fieldWrapper: { marginBottom: 4 },
   labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 5, marginTop: 10 },
   label: { fontSize: 13, fontWeight: '700', color: COLORS.sapphire },
@@ -502,8 +552,10 @@ const styles = StyleSheet.create({
   inputError: { borderColor: COLORS.danger, backgroundColor: '#fff5f5' },
   textArea: { height: 90, textAlignVertical: 'top' },
 
-  urlHint: { fontSize: 11, color: COLORS.gray, marginBottom: 6, fontStyle: 'italic' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  switchLabel: { fontSize: 14, color: COLORS.blackTie, fontWeight: '600' },
 
+  urlHint: { fontSize: 11, color: COLORS.gray, marginBottom: 6, fontStyle: 'italic' },
   quickLabel: { fontSize: 11, color: COLORS.sapphire, fontWeight: '700', marginTop: 10, marginBottom: 6 },
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   quickBtn: {

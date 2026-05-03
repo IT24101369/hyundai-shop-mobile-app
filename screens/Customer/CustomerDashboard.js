@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity,
-  FlatList, StatusBar, Alert, Image, TextInput, Dimensions, Modal, ScrollView, Platform
+  FlatList, StatusBar, Alert, Image, TextInput, Dimensions, Modal, ScrollView, Platform,
+  KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
@@ -28,40 +29,87 @@ const ProductImage = React.memo(({ uri }) => {
   );
 });
 
-const ProductCard = React.memo(({ product, onAddToCart, onPress }) => (
-  <TouchableOpacity
-    style={styles.productCard}
-    onPress={onPress}
-    activeOpacity={0.8}
-  >
-    <ProductImage uri={product.image} />
-    <View style={styles.productInfo}>
-      <Text style={styles.productTitle} numberOfLines={1}>{product.name}</Text>
-      <Text style={styles.productPrice}>Rs. {Number(product.price || 0).toLocaleString()}</Text>
-      
-      <View style={styles.extraInfo}>
-        <Text style={[styles.stockText, { color: product.stock > 0 ? COLORS.success : COLORS.danger }]}>
-          {product.stock > 0 ? '● In Stock' : '● Out of Stock'}
-        </Text>
-        <Text style={styles.deliveryText}>🚚 Delivery: Rs. 500</Text>
-      </View>
-
-      <TouchableOpacity 
-        style={[styles.addToCartBtn, product.stock <= 0 && { backgroundColor: COLORS.gray }]} 
-        disabled={product.stock <= 0}
-        onPress={() => onAddToCart(product)}
-      >
-        <Text style={styles.addToCartText}>Add to Cart</Text>
-      </TouchableOpacity>
+const StarRating = ({ reviews }) => {
+  if (!reviews || reviews.length === 0) {
+    return <Text style={styles.noReviewText}>☆☆☆☆☆ No reviews yet</Text>;
+  }
+  const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+  const stars = Math.round(avg);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      <Text style={styles.starText}>{'★'.repeat(stars)}{'☆'.repeat(5 - stars)}</Text>
+      <Text style={styles.reviewCountText}>({reviews.length})</Text>
     </View>
-  </TouchableOpacity>
-));
+  );
+};
+
+const ProductCard = React.memo(({ product, onAddToCart, onPress, onReviews }) => {
+  const discountedPrice = product.discount > 0
+    ? Math.round(product.price * (1 - product.discount / 100))
+    : null;
+
+  return (
+    <TouchableOpacity style={styles.productCard} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.imageWrapper}>
+        <ProductImage uri={product.image} />
+        {product.discount > 0 && (
+          <View style={styles.discountBadge}>
+            <Text style={styles.discountBadgeText}>-{product.discount}% OFF</Text>
+          </View>
+        )}
+        {product.isNew && (
+          <View style={styles.newBadge}>
+            <Text style={styles.newBadgeText}>NEW</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.productInfo}>
+        <Text style={styles.productTitle} numberOfLines={1}>{product.name}</Text>
+        {discountedPrice ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+            <Text style={styles.productPriceOld}>Rs. {Number(product.price).toLocaleString()}</Text>
+            <Text style={styles.productPriceNew}>Rs. {discountedPrice.toLocaleString()}</Text>
+          </View>
+        ) : (
+          <Text style={styles.productPrice}>Rs. {Number(product.price || 0).toLocaleString()}</Text>
+        )}
+
+        <StarRating reviews={product.reviews} />
+
+        <View style={styles.extraInfo}>
+          <Text style={[styles.stockText, { color: product.stock > 0 ? COLORS.success : COLORS.danger }]}>
+            {product.stock > 0 ? `● ${product.stock} in stock` : '● Out of Stock'}
+          </Text>
+          <Text style={styles.deliveryText}>🚚 Delivery: Rs. 500</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.addToCartBtn, product.stock <= 0 && { backgroundColor: COLORS.gray }]}
+          disabled={product.stock <= 0}
+          onPress={() => onAddToCart(product)}
+        >
+          <Text style={styles.addToCartText}>🛒 Add to Cart</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.reviewsBtn} onPress={() => onReviews(product)}>
+          <Text style={styles.reviewsBtnText}>⭐ Reviews</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 const CustomerDashboard = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [reviewName, setReviewName] = useState('');
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
 
   const [showPromo, setShowPromo] = useState(false);
   const [activePromo, setActivePromo] = useState(null);
@@ -149,6 +197,32 @@ const CustomerDashboard = ({ navigation }) => {
     }
   };
 
+  const handleOpenReviews = (product) => {
+    setSelectedProduct(product);
+    setReviewName(user?.name || '');
+    setReviewRating(5);
+    setReviewComment('');
+    setShowReviewModal(true);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewName.trim() || !reviewComment.trim()) {
+      Alert.alert('Missing Info', 'Please fill in your name and comment.');
+      return;
+    }
+    try {
+      await axios.post(
+        `https://hyundai-shop-backend-api.onrender.com/api/products/${selectedProduct._id}/reviews`,
+        { userName: reviewName, rating: reviewRating, comment: reviewComment }
+      );
+      Alert.alert('✅ Review Submitted', 'Thank you for your review!');
+      setShowReviewModal(false);
+      fetchProducts();
+    } catch (e) {
+      Alert.alert('Error', 'Could not submit review.');
+    }
+  };
+
   const filteredProducts = useMemo(() => {
     return products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [products, searchQuery]);
@@ -209,10 +283,11 @@ const CustomerDashboard = ({ navigation }) => {
         data={filteredProducts}
         keyExtractor={(item) => item._id}
         renderItem={({ item }) => (
-          <ProductCard 
-            product={item} 
+          <ProductCard
+            product={item}
             onAddToCart={handleAddToCart}
             onPress={() => Alert.alert(item.name, `Price: Rs. ${item.price}\n\n${item.description}`)}
+            onReviews={handleOpenReviews}
           />
         )}
         numColumns={2}
@@ -230,6 +305,78 @@ const CustomerDashboard = ({ navigation }) => {
           !loading && <Text style={styles.emptyText}>No products available yet.</Text>
         }
       />
+
+      {/* Review Modal */}
+      <Modal animationType="slide" transparent={true} visible={showReviewModal} onRequestClose={() => setShowReviewModal(false)}>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity 
+            style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }} 
+            activeOpacity={1} 
+            onPress={() => { Keyboard.dismiss(); setShowReviewModal(false); }} 
+          />
+          <View style={[styles.modalContainer, { width: '92%', maxHeight: '85%' }]}>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setShowReviewModal(false)}>
+              <Text style={styles.closeText}>✕</Text>
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { marginBottom: 4, marginTop: 10 }]}>⭐ Reviews</Text>
+            <Text style={{ color: COLORS.gray, fontSize: 13, marginBottom: 12 }}>{selectedProduct?.name}</Text>
+
+            {/* Existing Reviews */}
+            <ScrollView style={{ maxHeight: 160, marginBottom: 12 }} keyboardShouldPersistTaps="handled">
+              {selectedProduct?.reviews?.length > 0 ? (
+                selectedProduct.reviews.map((r, i) => (
+                  <View key={i} style={styles.reviewItem}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={styles.reviewUser}>{r.userName}</Text>
+                      <Text style={styles.reviewStar}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</Text>
+                    </View>
+                    <Text style={styles.reviewComment}>{r.comment}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={{ color: COLORS.gray, textAlign: 'center', marginVertical: 10 }}>No reviews yet. Be the first!</Text>
+              )}
+            </ScrollView>
+
+            {/* Add Review */}
+            <Text style={styles.addReviewTitle}>Add Your Review</Text>
+            <TextInput
+              style={styles.reviewInput}
+              placeholder="Your name"
+              placeholderTextColor={COLORS.gray}
+              value={reviewName}
+              onChangeText={setReviewName}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+            />
+            <View style={styles.ratingRow}>
+              <Text style={{ color: COLORS.sapphire, fontWeight: '700', fontSize: 13 }}>Rating: </Text>
+              {[1, 2, 3, 4, 5].map(n => (
+                <TouchableOpacity key={n} onPress={() => setReviewRating(n)}>
+                  <Text style={{ fontSize: 24, color: n <= reviewRating ? '#f59e0b' : COLORS.lightGray }}>★</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              style={[styles.reviewInput, { height: 70, textAlignVertical: 'top' }]}
+              placeholder="Write your comment..."
+              placeholderTextColor={COLORS.gray}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              multiline
+              blurOnSubmit={true}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+            />
+            <TouchableOpacity style={styles.copyBtn} onPress={handleSubmitReview}>
+              <Text style={styles.copyBtnText}>Submit Review</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Promo Modal */}
       <Modal animationType="fade" transparent={true} visible={showPromo}>
@@ -342,15 +489,45 @@ const styles = StyleSheet.create({
 
   columnWrapper: { justifyContent: 'space-between', marginBottom: 15 },
   productCard: { backgroundColor: COLORS.diamond, borderRadius: 16, width: '48.5%', overflow: 'hidden', elevation: 3 },
+  imageWrapper: { position: 'relative' },
   productImage: { width: '100%', height: 120, backgroundColor: COLORS.icyLake },
-  productInfo: { padding: 12 },
-  productTitle: { fontSize: 14, fontWeight: '700', color: COLORS.blackTie, marginBottom: 4 },
-  productPrice: { fontSize: 13, color: COLORS.golden, fontWeight: '800', marginBottom: 6 },
-  extraInfo: { marginBottom: 10, backgroundColor: COLORS.silver, padding: 6, borderRadius: 6 },
-  stockText: { fontSize: 10, fontWeight: '700', marginBottom: 4 },
+  discountBadge: {
+    position: 'absolute', top: 6, left: 6,
+    backgroundColor: COLORS.danger, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3,
+  },
+  discountBadgeText: { color: COLORS.diamond, fontSize: 10, fontWeight: '900' },
+  newBadge: {
+    position: 'absolute', top: 6, right: 6,
+    backgroundColor: COLORS.success, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3,
+  },
+  newBadgeText: { color: COLORS.diamond, fontSize: 10, fontWeight: '900' },
+  productInfo: { padding: 10 },
+  productTitle: { fontSize: 13, fontWeight: '700', color: COLORS.blackTie, marginBottom: 3 },
+  productPrice: { fontSize: 13, color: COLORS.golden, fontWeight: '800', marginBottom: 4 },
+  productPriceOld: { fontSize: 11, color: COLORS.gray, textDecorationLine: 'line-through' },
+  productPriceNew: { fontSize: 13, color: COLORS.danger, fontWeight: '800' },
+  noReviewText: { fontSize: 10, color: COLORS.gray, marginBottom: 4 },
+  starText: { fontSize: 11, color: '#f59e0b' },
+  reviewCountText: { fontSize: 10, color: COLORS.gray },
+  extraInfo: { marginVertical: 6, backgroundColor: COLORS.silver, padding: 5, borderRadius: 6 },
+  stockText: { fontSize: 10, fontWeight: '700', marginBottom: 2 },
   deliveryText: { fontSize: 10, color: COLORS.gray, fontWeight: '600' },
-  addToCartBtn: { backgroundColor: COLORS.sapphire, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  addToCartText: { color: COLORS.diamond, fontSize: 12, fontWeight: '600' },
+  addToCartBtn: { backgroundColor: COLORS.sapphire, paddingVertical: 7, borderRadius: 8, alignItems: 'center', marginBottom: 4 },
+  addToCartText: { color: COLORS.diamond, fontSize: 11, fontWeight: '600' },
+  reviewsBtn: { backgroundColor: '#fef3c7', paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
+  reviewsBtnText: { color: '#92400e', fontSize: 11, fontWeight: '700' },
+
+  reviewItem: { backgroundColor: COLORS.silver, borderRadius: 10, padding: 10, marginBottom: 8 },
+  reviewUser: { fontSize: 13, fontWeight: '700', color: COLORS.sapphire },
+  reviewStar: { fontSize: 13, color: '#f59e0b' },
+  reviewComment: { fontSize: 12, color: COLORS.gray, marginTop: 4 },
+  addReviewTitle: { fontSize: 15, fontWeight: '800', color: COLORS.sapphire, marginBottom: 8 },
+  reviewInput: {
+    backgroundColor: COLORS.silver, borderWidth: 1.5, borderColor: COLORS.lightGray,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+    fontSize: 13, color: COLORS.blackTie, marginBottom: 10,
+  },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 4 },
 
   bottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0, height: 75,

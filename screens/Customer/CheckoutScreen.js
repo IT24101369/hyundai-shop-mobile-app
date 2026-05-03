@@ -307,9 +307,14 @@ const CheckoutScreen = ({ route, navigation }) => {
         date: new Date().toLocaleString()
       };
 
-      Alert.alert('Success', 'Order placed successfully!', [
-        { text: 'View Invoice', onPress: () => navigation.replace('InvoiceScreen', { invoiceData }) }
-      ]);
+      if (Platform.OS === 'web') {
+        window.alert('Order placed successfully!');
+        navigation.replace('InvoiceScreen', { invoiceData });
+      } else {
+        Alert.alert('Success', 'Order placed successfully!', [
+          { text: 'View Invoice', onPress: () => navigation.replace('InvoiceScreen', { invoiceData }) }
+        ]);
+      }
     } catch (error) {
       const errorMessage = error.response?.data?.message || error.response?.data || error.message;
       console.log('Final Order Error:', errorMessage);
@@ -320,8 +325,10 @@ const CheckoutScreen = ({ route, navigation }) => {
     }
   };
 
+  const KeyboardWrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+
   return (
-    <KeyboardAvoidingView 
+    <KeyboardWrapper 
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
@@ -642,7 +649,7 @@ const CheckoutScreen = ({ route, navigation }) => {
         </View>
       </Modal>
 
-    </KeyboardAvoidingView>
+    </KeyboardWrapper>
   );
 };
 
