@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  StyleSheet, Text, View, TouchableOpacity, ScrollView, Linking, Alert
+  StyleSheet, Text, View, TouchableOpacity, ScrollView, Linking, Alert, Platform
 } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -48,8 +48,12 @@ const InvoiceScreen = ({ route, navigation }) => {
         </html>
       `;
       
-      const { uri } = await Print.printToFileAsync({ html: htmlContent });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+      if (Platform.OS === 'web') {
+        await Print.printAsync({ html: htmlContent });
+      } else {
+        const { uri } = await Print.printToFileAsync({ html: htmlContent });
+        await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to download invoice.');
     }
@@ -72,7 +76,11 @@ const InvoiceScreen = ({ route, navigation }) => {
         <Text style={styles.title}>Invoice Receipt</Text>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scroll} 
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 60 }}
+        showsVerticalScrollIndicator={Platform.OS === 'web'}
+      >
         <View style={styles.invoiceCard}>
           {/* Top Banner */}
           <View style={[styles.successBanner, invoiceData.paymentMethod === 'Cash on Delivery' && { backgroundColor: '#fffbeb', borderBottomColor: '#fde68a' }]}>

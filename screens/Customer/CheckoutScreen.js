@@ -24,6 +24,8 @@ const CheckoutScreen = ({ route, navigation }) => {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [finalInvoiceData, setFinalInvoiceData] = useState(null);
 
   const grandTotal = totalAmount + deliveryFee - discountAmount;
   
@@ -307,14 +309,10 @@ const CheckoutScreen = ({ route, navigation }) => {
         date: new Date().toLocaleString()
       };
 
-      if (Platform.OS === 'web') {
-        window.alert('Order placed successfully!');
-        navigation.replace('InvoiceScreen', { invoiceData });
-      } else {
-        Alert.alert('Success', 'Order placed successfully!', [
-          { text: 'View Invoice', onPress: () => navigation.replace('InvoiceScreen', { invoiceData }) }
-        ]);
-      }
+      // Show Custom Success Modal instead of Alert
+      setFinalInvoiceData(invoiceData);
+      setShowSuccessModal(true);
+
     } catch (error) {
       const errorMessage = error.response?.data?.message || error.response?.data || error.message;
       console.log('Final Order Error:', errorMessage);
@@ -645,6 +643,29 @@ const CheckoutScreen = ({ route, navigation }) => {
             <View style={styles.gatewayFooter}>
               <Text style={styles.footerNote}>Verified by VISA / Mastercard SecureCode</Text>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Success Modal */}
+      <Modal visible={showSuccessModal} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.gatewayCard, { padding: 30, alignItems: 'center' }]}>
+            <View style={styles.successCircle}>
+              <Text style={styles.successCheck}>✅</Text>
+            </View>
+            <Text style={styles.successTitle}>Order Placed Successfully!</Text>
+            <Text style={[styles.gatewaySubtext, { marginBottom: 25 }]}>Your order has been confirmed and is being processed.</Text>
+            
+            <TouchableOpacity 
+              style={styles.verifyBtn} 
+              onPress={() => {
+                setShowSuccessModal(false);
+                navigation.replace('InvoiceScreen', { invoiceData: finalInvoiceData });
+              }}
+            >
+              <Text style={styles.verifyBtnText}>📄 VIEW INVOICE</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
