@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity,
-  ScrollView, StatusBar, Alert, ActivityIndicator
+  ScrollView, StatusBar, Alert, ActivityIndicator, Platform
 } from 'react-native';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
@@ -62,13 +62,20 @@ const RiderDashboard = ({ navigation }) => {
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to logout?')) {
         logout();
         navigation.replace('Login');
-      }},
-    ]);
+      }
+    } else {
+      Alert.alert('Logout', 'Are you sure you want to logout?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', style: 'destructive', onPress: () => {
+          logout();
+          navigation.replace('Login');
+        }},
+      ]);
+    }
   };
 
   const menuItems = [
@@ -187,7 +194,8 @@ const RiderDashboard = ({ navigation }) => {
                 } else if (item.title === 'My Profile') {
                   navigation.navigate('RiderProfileScreen');
                 } else {
-                  Alert.alert('Coming Soon', `${item.title} module is being built!`);
+                  if (Platform.OS === 'web') window.alert(`${item.title} module is being built!`);
+                  else Alert.alert('Coming Soon', `${item.title} module is being built!`);
                 }
               }}
               activeOpacity={0.8}
