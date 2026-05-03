@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext } from 'react';
+import axios from 'axios';
 
 const AuthContext = createContext();
 
@@ -9,11 +10,13 @@ export const AuthProvider = ({ children }) => {
   const login = (userData, authToken) => {
     setUser(userData);
     setToken(authToken);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`;
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
+    delete axios.defaults.headers.common['Authorization'];
   };
 
   return (

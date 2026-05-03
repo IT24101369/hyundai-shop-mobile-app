@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView, Platform
 } from 'react-native';
 import axios from 'axios';
+import { useAuth } from '../../context/AuthContext';
 
 const COLORS = {
   sapphire: '#0f2747', golden: '#3b82f6', silver: '#f4f7fb',
@@ -46,6 +47,7 @@ const InputField = ({ label, required, error, children }) => (
 );
 
 const InventoryScreen = ({ navigation }) => {
+  const { token } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -170,11 +172,13 @@ const InventoryScreen = ({ navigation }) => {
         image: image.trim() || undefined,
       };
 
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+
       if (isEditing) {
-        await axios.put(`${API_BASE}/products/${currentProductId}`, productData);
+        await axios.put(`${API_BASE}/products/${currentProductId}`, productData, config);
         Alert.alert('✅ Updated', 'Product updated successfully');
       } else {
-        await axios.post(`${API_BASE}/products`, productData);
+        await axios.post(`${API_BASE}/products`, productData, config);
         Alert.alert('✅ Added', 'Product added to inventory');
       }
 
@@ -194,7 +198,8 @@ const InventoryScreen = ({ navigation }) => {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
           try {
-            await axios.delete(`${API_BASE}/products/${id}`);
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            await axios.delete(`${API_BASE}/products/${id}`, config);
             fetchProducts();
             Alert.alert('Deleted', 'Product has been removed.');
           } catch (error) {
@@ -274,7 +279,7 @@ const InventoryScreen = ({ navigation }) => {
 
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
@@ -289,8 +294,8 @@ const InventoryScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
-              showsVerticalScrollIndicator={false} 
+            <ScrollView
+              showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 20 }}
             >
@@ -447,7 +452,7 @@ const styles = StyleSheet.create({
   title: { color: COLORS.diamond, fontSize: 18, fontWeight: '700' },
   addBtn: { backgroundColor: COLORS.golden, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
   addBtnText: { color: COLORS.diamond, fontWeight: '800', fontSize: 14 },
-  
+
   overviewContainer: { flexDirection: 'row', paddingHorizontal: 18, paddingTop: 18, gap: 12 },
   overviewCard: { flex: 1, backgroundColor: COLORS.diamond, borderRadius: 12, padding: 14, alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08 },
   overviewValue: { fontSize: 20, fontWeight: '800', color: COLORS.sapphire, marginBottom: 4 },
