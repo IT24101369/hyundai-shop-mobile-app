@@ -147,13 +147,21 @@ const CustomerDashboard = ({ navigation }) => {
   }, [fetchProducts]);
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => {
+    if (Platform.OS === 'web') {
+      const confirmLogout = window.confirm('Are you sure you want to logout?');
+      if (confirmLogout) {
         logout();
         navigation.replace('Login');
-      }},
-    ]);
+      }
+    } else {
+      Alert.alert('Logout', 'Are you sure you want to logout?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', style: 'destructive', onPress: () => {
+          logout();
+          navigation.replace('Login');
+        }},
+      ]);
+    }
   };
 
   const handleAddToCart = useCallback(async (product) => {

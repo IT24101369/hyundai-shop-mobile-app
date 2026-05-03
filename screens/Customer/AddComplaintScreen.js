@@ -123,9 +123,15 @@ const AddComplaintScreen = ({ navigation }) => {
       };
 
       await axios.post(`${API_BASE}/complaints`, complaintData);
-      Alert.alert('✅ Submitted', 'Your complaint has been registered. Our team will contact you soon.', [
-        { text: 'Done', onPress: () => navigation.goBack() }
-      ]);
+      
+      if (Platform.OS === 'web') {
+        window.alert('✅ Your complaint has been registered. Our team will contact you soon.');
+        navigation.goBack();
+      } else {
+        Alert.alert('✅ Submitted', 'Your complaint has been registered. Our team will contact you soon.', [
+          { text: 'Done', onPress: () => navigation.goBack() }
+        ]);
+      }
     } catch (error) {
       Alert.alert('Submission Failed', 'Could not register complaint. Please try again.');
     } finally {
