@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, Alert, ActivityIndicator, Dimensions
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker } from '../../components/Map';
 import axios from 'axios';
 
 const COLORS = {

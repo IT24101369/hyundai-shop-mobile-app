@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity, Alert, ActivityIndicator, Dimensions, Linking
 } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline } from '../../components/Map';
 import * as Location from 'expo-location';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
