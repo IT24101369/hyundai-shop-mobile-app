@@ -21,9 +21,9 @@ const AddComplaintScreen = ({ navigation }) => {
   const { user } = useAuth();
   
   // Customer Info
-  const [fullName, setFullName] = useState(user?.name || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phone || '');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [orderId, setOrderId] = useState('');
 
   // Product Info
@@ -66,6 +66,9 @@ const AddComplaintScreen = ({ navigation }) => {
   const handleSelectOrder = (order) => {
     console.log('Order Selected:', order._id);
     setOrderId(order._id);
+    setFullName(user?.name || '');
+    setEmail(user?.email || '');
+    setPhone(''); // Ensure phone number is manually entered
     
     // Auto-fill H Code using Tracking ID if available, else a fallback
     const trackingCode = order.trackingId || `H-${order._id.slice(-6).toUpperCase()}`;
