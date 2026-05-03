@@ -167,22 +167,28 @@ const InventoryScreen = ({ navigation }) => {
   };
 
   const handleDelete = (id) => {
-    Alert.alert('Delete Product', 'Are you sure you want to delete this product?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          try {
-            const config = { headers: { Authorization: `Bearer ${token}` } };
-            await axios.delete(`${API_BASE}/products/${id}`, config);
-            fetchProducts();
-            Alert.alert('Deleted', 'Product has been removed.');
-          } catch (error) {
-            Alert.alert('Error', 'Could not delete product');
-          }
-        }
+    const doDelete = async () => {
+      try {
+        const config = { headers: { Authorization: `Bearer ${token}` } };
+        await axios.delete(`${API_BASE}/products/${id}`, config);
+        fetchProducts();
+        if (Platform.OS !== 'web') Alert.alert('Deleted', 'Product has been removed.');
+      } catch (error) {
+        if (Platform.OS === 'web') window.alert('Could not delete product');
+        else Alert.alert('Error', 'Could not delete product');
       }
-    ]);
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this product?')) {
+        doDelete();
+      }
+    } else {
+      Alert.alert('Delete Product', 'Are you sure you want to delete this product?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete }
+      ]);
+    }
   };
 
   const ProductItem = React.memo(({ item, onEdit, onDelete }) => (
@@ -286,12 +292,16 @@ const InventoryScreen = ({ navigation }) => {
 
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.modalOverlay}
-          >
-            <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          {Platform.OS !== 'web' && (
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={StyleSheet.absoluteFill} />
+            </TouchableWithoutFeedback>
+          )}
+          <View style={styles.modalContainer}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
                   {isEditing ? '✏️ Edit Product' : '📦 Add New Product'}
@@ -472,8 +482,7 @@ const InventoryScreen = ({ navigation }) => {
                 </View>
               </ScrollView>
             </View>
-          </KeyboardAvoidingView>
-        </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

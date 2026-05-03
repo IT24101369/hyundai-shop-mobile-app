@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  StyleSheet, Text, View, TouchableOpacity, FlatList, Alert, ActivityIndicator, TextInput
+  StyleSheet, Text, View, TouchableOpacity, FlatList, Alert, ActivityIndicator, TextInput, Platform
 } from 'react-native';
 import axios from 'axios';
 
@@ -60,12 +60,21 @@ const AdminComplaintsScreen = ({ navigation }) => {
   }, [searchQuery, activeTab, complaints]);
 
   const handleUpdateStatus = (id, currentStatus) => {
-    Alert.alert('Update Status', `Current: ${currentStatus}`, [
-      { text: 'Pending', onPress: () => updateStatus(id, 'PENDING') },
-      { text: 'In Progress', onPress: () => updateStatus(id, 'IN_PROGRESS') },
-      { text: 'Resolved', onPress: () => updateStatus(id, 'RESOLVED') },
-      { text: 'Cancel', style: 'cancel' }
-    ]);
+    if (Platform.OS === 'web') {
+      const newStatus = window.prompt(`Current Status: ${currentStatus}\nEnter new status (PENDING, IN_PROGRESS, RESOLVED):`, currentStatus);
+      if (newStatus && ['PENDING', 'IN_PROGRESS', 'RESOLVED'].includes(newStatus.toUpperCase().trim())) {
+        updateStatus(id, newStatus.toUpperCase().trim());
+      } else if (newStatus) {
+        window.alert('Invalid status. Please enter PENDING, IN_PROGRESS, or RESOLVED.');
+      }
+    } else {
+      Alert.alert('Update Status', `Current: ${currentStatus}`, [
+        { text: 'Pending', onPress: () => updateStatus(id, 'PENDING') },
+        { text: 'In Progress', onPress: () => updateStatus(id, 'IN_PROGRESS') },
+        { text: 'Resolved', onPress: () => updateStatus(id, 'RESOLVED') },
+        { text: 'Cancel', style: 'cancel' }
+      ]);
+    }
   };
 
   const updateStatus = async (id, newStatus) => {
@@ -78,20 +87,26 @@ const AdminComplaintsScreen = ({ navigation }) => {
   };
 
   const handleDelete = (id) => {
-    Alert.alert('Delete Complaint', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Delete', style: 'destructive', 
-        onPress: async () => {
-          try {
-            await axios.delete(`${API_BASE}/complaints/${id}`);
-            fetchComplaints();
-          } catch (error) {
-            Alert.alert('Error', 'Could not delete complaint');
-          }
-        }
+    const doDelete = async () => {
+      try {
+        await axios.delete(`${API_BASE}/complaints/${id}`);
+        fetchComplaints();
+      } catch (error) {
+        if (Platform.OS === 'web') window.alert('Could not delete complaint');
+        else Alert.alert('Error', 'Could not delete complaint');
       }
-    ]);
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this complaint?')) {
+        doDelete();
+      }
+    } else {
+      Alert.alert('Delete Complaint', 'Are you sure?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete }
+      ]);
+    }
   };
 
   const renderItem = ({ item }) => (
